@@ -66,6 +66,23 @@ With NVTX observability (for profiling):
 make build_nvtx_profile
 ```
 
+## API Documentation (Rust)
+
+Build `qdp-core` rustdoc locally from `qdp/`:
+
+```bash
+cargo doc --package qdp-core --no-deps
+```
+
+Open:
+
+```text
+target/doc/qdp_core/index.html
+```
+
+CI also runs this command in the **QDP Rustdoc** workflow and uploads docs as
+the `qdp-core-rustdoc` artifact.
+
 ## Install as Python Package
 
 From the **repository root** you can install the main project with QDP:
