@@ -104,6 +104,30 @@ Return `(device_type, device_id)`; CUDA devices report `(2, gpu_id)`.
 - Expects `n` parameters for `n = num_qubits` (Z terms only).
 - All parameters must be finite (no NaN/Inf).
 
+## Rust API Docs (`qdp-core`)
+
+Rust API docs for `qdp-core` are built in CI by the **QDP Rustdoc** workflow
+using:
+
+```bash
+cargo doc --package qdp-core --no-deps
+```
+
+The generated docs are uploaded as the `qdp-core-rustdoc` artifact in CI.
+
+To build locally from the repository root:
+
+```bash
+cd qdp
+cargo doc --package qdp-core --no-deps
+```
+
+Local output is written to:
+
+```text
+qdp/target/doc/qdp_core/index.html
+```
+
 ## Supported File Formats
 
 - **Parquet**: `.parquet`
