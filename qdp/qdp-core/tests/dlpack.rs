@@ -21,8 +21,12 @@ mod dlpack_tests {
     use std::ffi::c_void;
 
     use cudarc::driver::CudaDevice;
+    use qdp_core::MahoutError;
     use qdp_core::Precision;
-    use qdp_core::dlpack::{CUDA_STREAM_LEGACY, synchronize_stream};
+    use qdp_core::dlpack::{
+        CUDA_STREAM_LEGACY, DL_FLOAT, DLDataType, DLDevice, DLDeviceType, DLManagedTensor,
+        DLTensor, free_dlpack_tensor, synchronize_stream,
+    };
     use qdp_core::gpu::memory::GpuStateVector;
 
     #[test]
@@ -31,8 +35,9 @@ mod dlpack_tests {
 
         let num_samples = 4;
         let num_qubits = 2; // 2^2 = 4 elements per sample
-        let state_vector = GpuStateVector::new_batch(&device, num_samples, num_qubits)
-            .expect("Failed to create batch state vector");
+        let state_vector =
+            GpuStateVector::new_batch(&device, num_samples, num_qubits, Precision::Float64)
+                .expect("Failed to create batch state vector");
 
         let dlpack_ptr = state_vector.to_dlpack();
         assert!(!dlpack_ptr.is_null());
@@ -120,6 +125,41 @@ mod dlpack_tests {
         }
     }
 
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_dlpack_batch_shape_f32() {
+        let device = CudaDevice::new(0).unwrap();
+
+        let num_samples = 3;
+        let num_qubits = 2;
+        let state_vector =
+            GpuStateVector::new_batch(&device, num_samples, num_qubits, Precision::Float32)
+                .expect("Failed to create Float32 batch state vector");
+
+        assert!(
+            state_vector.ptr_f32().is_some(),
+            "Float32 batch state vector should have ptr_f32()"
+        );
+        assert!(
+            state_vector.ptr_f64().is_none(),
+            "Float32 batch state vector should not have ptr_f64()"
+        );
+
+        let dlpack_ptr = state_vector.to_dlpack();
+        assert!(!dlpack_ptr.is_null());
+
+        unsafe {
+            let tensor = &(*dlpack_ptr).dl_tensor;
+            assert_eq!(tensor.ndim, 2, "DLPack tensor should be 2D");
+            let shape = std::slice::from_raw_parts(tensor.shape, 2);
+            assert_eq!(shape[0], num_samples as i64);
+            assert_eq!(shape[1], (1 << num_qubits) as i64);
+            if let Some(deleter) = (*dlpack_ptr).deleter {
+                deleter(dlpack_ptr);
+            }
+        }
+    }
+
     /// synchronize_stream(null) is a no-op and returns Ok(()) on all platforms.
     #[test]
     fn test_synchronize_stream_null() {
@@ -142,6 +182,132 @@ mod dlpack_tests {
                 result.is_ok(),
                 "synchronize_stream(CUDA_STREAM_LEGACY) should succeed on Linux with CUDA"
             );
+        }
+    }
+
+    /// free_dlpack_tensor(null) should return an InvalidInput error instead of panicking.
+    #[test]
+    fn test_free_dlpack_tensor_null_ptr() {
+        unsafe {
+            let result = free_dlpack_tensor(std::ptr::null_mut());
+            match result {
+                Err(MahoutError::InvalidInput(msg)) => {
+                    assert!(
+                        msg.to_lowercase().contains("null"),
+                        "Expected null-pointer error message, got: {}",
+                        msg
+                    );
+                }
+                other => panic!(
+                    "Expected InvalidInput error for null pointer, got: {:?}",
+                    other
+                ),
+            }
+        }
+    }
+
+    /// free_dlpack_tensor should detect missing deleter and return an InvalidInput error.
+    #[test]
+    fn test_free_dlpack_tensor_missing_deleter() {
+        // Minimal, but structurally valid, DLTensor for constructing DLManagedTensor.
+        let dummy_tensor = DLTensor {
+            data: std::ptr::null_mut(),
+            device: DLDevice {
+                device_type: DLDeviceType::kDLCPU,
+                device_id: 0,
+            },
+            ndim: 0,
+            dtype: DLDataType {
+                code: DL_FLOAT,
+                bits: 64,
+                lanes: 1,
+            },
+            shape: std::ptr::null_mut(),
+            strides: std::ptr::null_mut(),
+            byte_offset: 0,
+        };
+
+        let managed = DLManagedTensor {
+            dl_tensor: dummy_tensor,
+            manager_ctx: std::ptr::null_mut(),
+            deleter: None,
+        };
+
+        let ptr = Box::into_raw(Box::new(managed));
+
+        unsafe {
+            let result = free_dlpack_tensor(ptr);
+            match result {
+                Err(MahoutError::InvalidInput(msg)) => {
+                    assert!(
+                        msg.to_lowercase().contains("deleter"),
+                        "Expected missing-deleter error message, got: {}",
+                        msg
+                    );
+                }
+                other => panic!(
+                    "Expected InvalidInput error for missing deleter, got: {:?}",
+                    other
+                ),
+            }
+
+            // free_dlpack_tensor must not free the tensor when deleter is missing;
+            // reclaim it here to avoid a leak in tests.
+            let _ = Box::from_raw(ptr);
+        }
+    }
+
+    /// free_dlpack_tensor should call the deleter exactly once and return Ok(()).
+    #[test]
+    fn test_free_dlpack_tensor_calls_deleter() {
+        static mut DELETER_CALLED: bool = false;
+
+        unsafe extern "C" fn test_deleter(_ptr: *mut DLManagedTensor) {
+            // SAFETY: This test is single-threaded; it's safe to mutate the static flag.
+            unsafe {
+                DELETER_CALLED = true;
+            }
+        }
+
+        let dummy_tensor = DLTensor {
+            data: std::ptr::null_mut(),
+            device: DLDevice {
+                device_type: DLDeviceType::kDLCPU,
+                device_id: 0,
+            },
+            ndim: 0,
+            dtype: DLDataType {
+                code: DL_FLOAT,
+                bits: 64,
+                lanes: 1,
+            },
+            shape: std::ptr::null_mut(),
+            strides: std::ptr::null_mut(),
+            byte_offset: 0,
+        };
+
+        let managed = DLManagedTensor {
+            dl_tensor: dummy_tensor,
+            manager_ctx: std::ptr::null_mut(),
+            deleter: Some(test_deleter),
+        };
+
+        let ptr = Box::into_raw(Box::new(managed));
+
+        unsafe {
+            let result = free_dlpack_tensor(ptr);
+            assert!(
+                result.is_ok(),
+                "free_dlpack_tensor should succeed for valid pointer: {:?}",
+                result
+            );
+            assert!(
+                DELETER_CALLED,
+                "free_dlpack_tensor should invoke the DLPack deleter"
+            );
+
+            // Our custom deleter doesn't free the allocation; reclaim it here.
+            let _ = Box::from_raw(ptr);
         }
     }
 }
