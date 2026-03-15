@@ -5,6 +5,13 @@ sidebar_label: API
 
 # QuMat Class Methods
 
+For source-generated API output, see [Auto-generated Python API](./api-autogen).
+Regenerate it locally with:
+
+```bash
+uv run python scripts/generate_qumat_api_docs.py
+```
+
 ## `__init__(self, backend_config)`
 - **Purpose**: Initializes the QuMat instance with a specific backend.
 - **Parameters**:

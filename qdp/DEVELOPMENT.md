@@ -91,7 +91,25 @@ uv run pytest testing/qdp -v
 uv run pytest qdp/qdp-python/tests -v
 ```
 
-## 4. Benchmarks
+## 4. Rust API Docs (`qdp-core`)
+
+Build Rust API docs locally:
+
+```bash
+cd qdp
+cargo doc --package qdp-core --no-deps
+```
+
+Open:
+
+```text
+target/doc/qdp_core/index.html
+```
+
+CI also runs this command in the `QDP Rustdoc` workflow and uploads docs as
+the `qdp-core-rustdoc` artifact.
+
+## 5. Benchmarks
 
 Install benchmark dependency group into the same root venv:
 
@@ -115,7 +133,7 @@ uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_e2e.py
 uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_throughput.py --qubits 16 --batches 200 --batch-size 64 --prefetch 16
 ```
 
-## 5. NVTX / nsys Profiling
+## 6. NVTX / nsys Profiling
 
 Build extension with observability feature:
 
@@ -136,7 +154,7 @@ Read profiling summary:
 nsys stats qdp-e2e.nsys-rep
 ```
 
-## 6. Common Issues
+## 7. Common Issues
 
 - `nvcc: command not found`
   - CUDA toolkit is not installed or not in `PATH`.

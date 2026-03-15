@@ -21,6 +21,7 @@ const sidebars: SidebarsConfig = {
         'qumat/basic-gates',
         'qumat/parameterized-circuits',
         'qumat/api',
+        'qumat/api-autogen',
         'qumat/concepts',
         'qumat/examples',
       ],

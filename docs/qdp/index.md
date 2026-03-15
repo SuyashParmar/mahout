@@ -10,3 +10,4 @@ QDP (Quantum Data Plane) is a high-performance GPU-accelerated library for encod
 - [Core Concepts](./concepts)
 - [API Reference](./api)
 - [Examples](./examples)
+- [Rust API Docs Workflow](./api#rust-api-docs-qdp-core)

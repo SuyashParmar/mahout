@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: test_rust test_python tests pre-commit setup-test-python install-llvm-cov
+.PHONY: test_rust test_python tests pre-commit setup-test-python install-llvm-cov docs_python_api
 
 # Detect NVIDIA GPU
 HAS_NVIDIA := $(shell command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1 && echo yes || echo no)
@@ -44,3 +44,6 @@ tests: test_rust test_python
 
 pre-commit: setup-test-python
 	uv run pre-commit run --all-files
+
+docs_python_api: setup-test-python
+	uv run python scripts/generate_qumat_api_docs.py
